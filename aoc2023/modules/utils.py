@@ -1,4 +1,4 @@
-from itertools import islice
+from itertools import islice, tee
 from math import sqrt
 
 ### array utils
@@ -14,6 +14,13 @@ def batched(iterable, n):
     it = iter(iterable)
     while batch := tuple(islice(it, n)):
         yield batch
+
+# from https://docs.python.org/3/library/itertools.html#itertools.pairwise
+def pairwise(iterable):
+    # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 ### math utils
 # quadratic formula
