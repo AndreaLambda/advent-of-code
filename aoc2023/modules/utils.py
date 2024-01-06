@@ -5,6 +5,9 @@ from math import sqrt
 def rev(x):
     return x[::-1]
 
+def filter_none(arr: list) -> list:
+    return [x for x in arr if x is not None]
+
 ### iter utils
 # from https://docs.python.org/3/library/itertools.html#itertools.batched
 def batched(iterable, n):

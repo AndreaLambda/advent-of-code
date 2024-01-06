@@ -1,7 +1,8 @@
 # common types
 from enum import Enum
+from heapq import heappop, heappush
 from functools import cached_property
-from typing import NamedTuple
+from typing import Callable, Generic, Iterator, NamedTuple, TypeVar
 
 
 class Loc(NamedTuple):
@@ -79,3 +80,54 @@ class Counter:
         while True:
             yield self._next
             self._next += 1
+
+
+T = TypeVar("T")
+TKey = TypeVar("TKey")
+
+class KeyedPQ(Generic[T, TKey]):
+    """
+    Priority Queue which tracks the keys of items. When trying to add a new item with the same key as
+    another, uses replace_if to determine whether to replace the old item or reject the new item.
+    Uses replace_if even when a new item has the same key as an already-popped item.
+    """
+    use_item_as_key: Callable[[T], T] = lambda t: t             # default: use the item itself as the key
+    bool_replace: Callable[[T, T], bool] = lambda a, b: True    # default: always replace old items
+
+    def __init__(
+            self,
+            init_items: list[T]=[],
+            key: Callable[[T], TKey]=use_item_as_key,
+            replace_if: Callable[[T, T], bool]=bool_replace,
+        ):
+        self.key = key
+        self.replace_if = replace_if
+        self.pq: list[T] = []
+        self.items: dict[TKey, T] = {}
+        self.add_all(init_items)
+
+    def add_all(self, items: list[T]):
+        for item in items:
+            self.add(item)
+
+    def add(self, item: T):
+        item_key = self.key(item)
+        do_add = True
+        # replace old item in the queue if replace_if is True and the old item is not already popped
+        if item_key in self.items and (do_add := self.replace_if((existing := self.items[item_key]), item)) and existing in self.pq:
+            self.pq.remove(existing)
+        # if replace_if was False, reject the new item
+        if do_add:
+            heappush(self.pq, item)
+            self.items[item_key] = item
+
+    def pop(self) -> T:
+        item = heappop(self.pq)
+        return item
+
+    def iter(self) -> Iterator[T]:
+        while self.pq:
+            yield self.pop()
+
+    def __repr__(self):
+        return str(self.pq)
