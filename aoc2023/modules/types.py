@@ -2,7 +2,7 @@
 from enum import Enum
 from heapq import heappop, heappush
 from functools import cached_property
-from typing import Callable, Generic, Iterator, NamedTuple, TypeVar
+from typing import Callable, Iterator, NamedTuple
 
 
 class Loc(NamedTuple):
@@ -82,10 +82,8 @@ class Counter:
             self._next += 1
 
 
-T = TypeVar("T")
-TKey = TypeVar("TKey")
 
-class KeyedPQ(Generic[T, TKey]):
+class KeyedPQ[T, TKey]:
     """
     Priority Queue which tracks the keys of items. When trying to add a new item with the same key as
     another, uses replace_if to determine whether to replace the old item or reject the new item.
@@ -131,3 +129,17 @@ class KeyedPQ(Generic[T, TKey]):
 
     def __repr__(self):
         return str(self.pq)
+
+
+class DefaultKeydict[KT, VT](dict[KT, VT]):
+    """ Similar to defaultdict, but passes the missing key into the default_factory. """
+    def __init__(self, default_factory: Callable[[KT], VT]):
+        super().__init__()
+        self.default_factory = default_factory
+
+    def __missing__(self, key: KT) -> VT:
+        if self.default_factory is None:
+            raise KeyError(key)
+        else:
+            res = self[key] = self.default_factory(key)
+            return res

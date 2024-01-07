@@ -8,6 +8,9 @@ def rev(x):
 def filter_none(arr: list) -> list:
     return [x for x in arr if x is not None]
 
+def flatten(arr):
+    return [x for sub_arr in arr for x in sub_arr]
+
 ### iter utils
 # from https://docs.python.org/3/library/itertools.html#itertools.batched
 def batched(iterable, n):
