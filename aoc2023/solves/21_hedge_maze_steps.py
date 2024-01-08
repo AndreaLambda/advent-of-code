@@ -1,9 +1,9 @@
 # day 21: hedge maze stepcounts
 from math import ceil
+from itertools import batched
 from modules.array_math import shifted_diff, addwise, mult
 from modules.parse import find_in_input, get_input
 from modules.types import Loc, Dir
-from modules.utils import batched
 
 class MazeWalker:
     def __init__(self, maze: list[str], start: Loc):

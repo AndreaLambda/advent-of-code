@@ -1,6 +1,6 @@
 # day 9: oasis predictions
+from itertools import pairwise
 from modules.parse import get_input
-from modules.utils import pairwise
 
 def parse_input(input):
     return [[int(num) for num in line.split(" ")] for line in input.splitlines()]
@@ -31,7 +31,7 @@ def process_input(input, predictor=predict_next):
     lines = parse_input(input)
     return sum([predictor(line) for line in lines])
 
-# process_input(get_input(9, test=True), predict_next)
+# assert process_input(get_input(9, test=True), predict_next) == 114
 # process_input(get_input(9), predict_next)
-# process_input(get_input(9, test=True), predict_prev)
+# assert process_input(get_input(9, test=True), predict_prev) == 2
 process_input(get_input(9), predict_prev)

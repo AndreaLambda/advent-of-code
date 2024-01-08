@@ -1,7 +1,7 @@
 # day 5: seed plots
+from itertools import batched
 from typing import NamedTuple
 from modules.parse import get_input
-from modules.utils import batched
 
 class Mapping(NamedTuple):
     dst: int
@@ -76,7 +76,7 @@ def process_input(input: str, expanded=False):
     mapped = map_seeds(seeds, almanac.mappings, plotter)
     return mapped if type(mapped) == int else min(mapped)
 
-# process_input(get_input(5, test=True))
+# assert process_input(get_input(5, test=True)) == 35
 # process_input(get_input(5))
-# process_input(get_input(5, test=True), expanded=True)
+# assert process_input(get_input(5, test=True), expanded=True) == 46
 process_input(get_input(5), expanded=True)
