@@ -4,7 +4,7 @@ from math import sqrt
 def rev(x):
     return x[::-1]
 
-def filter_none(arr: list) -> list:
+def filter_none[T](arr: list[T]) -> list[T]:
     return [x for x in arr if x is not None]
 
 def flatten(arr):
