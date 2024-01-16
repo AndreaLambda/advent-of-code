@@ -1,4 +1,4 @@
-# day 23: hiking slopes (no pruning, arrives at correct answer after 1.5m nodes, completes around 7.75m nodes)
+# day 23: hiking slopes
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
@@ -70,20 +70,26 @@ class WalkerNode:
     def enc_id(self) -> EncodedNodes:
         return encode_id(self.id)
 
+    @cached_property
+    def longest(self) -> Steps:
+        return max(self.paths.values()) if self.paths else 0
+
 class WalkerStateKey(NamedTuple):
     node_id: NodeId
     remaining: EncodedNodes
 
 class WalkerState(NamedTuple):
     node_id: NodeId
-    steps: Steps
+    steps: Steps                # steps taken so far
+    max_left: Steps             # (over)estimate of max steps still available (allows A* pruning)
     remaining: EncodedNodes
 
     def key(self) -> "WalkerStateKey":
         return WalkerStateKey(self.node_id, self.remaining)
 
     def __lt__(self, other: "WalkerState"):
-        return self.steps < other.steps
+        # intentionally flipped, so that Dijkstra prioritizes states with the most steps first
+        return self.steps > other.steps
 
     def __str__(self):
         return f"{self.steps} steps, Node {self.node_id}: done {self.remaining}"
@@ -274,20 +280,27 @@ class TrailWalker:
         self.nodes = {node.id: convert(node) for node in self.trail.nodes.values()}
         self.nodes_to_walk: KeyedPQ[WalkerState, WalkerStateKey] = KeyedPQ(
             init_items=[self.get_start_state()],
-            key=lambda s: s.key() if s.node_id != self.trail.end.id else self.end_key,
-            replace_if=lambda a,b: b.steps < a.steps,
+            key=lambda s: s.key() if s.node_id != self.end_id else self.end_key,
+            replace_if=lambda a,b: a.steps < b.steps,
         )
+        self.end_steps: Steps = None        # longest path start-to-end found so far
+
+    @cached_property
+    def end_id(self) -> NodeId:
+        return self.trail.end.id
 
     @cached_property
     def end_key(self) -> WalkerStateKey:
-        return WalkerStateKey(self.trail.end.id, 0)
+        return WalkerStateKey(self.end_id, 0)
 
     def get_start_state(self) -> WalkerState:
         # this creates a state where all nodes are still remaining
         # e.g. if the highest node id is 4, this results in set(0,1,2,3,4) => b11111
         start_node = self.nodes[self.trail.start.id]
         highest_node = self.nodes[len(self.nodes) - 1]
-        return WalkerState(start_node.id, 0, highest_node.enc_id * 2 - 1)
+        # overestimate of maximum number of steps possible, for A* pruning
+        max_steps = sum(node.longest for node in self.nodes.values())
+        return WalkerState(start_node.id, 0, max_steps, highest_node.enc_id * 2 - 1)
 
     def walk_trail(self, max_nodes=None) -> Steps:
         n = 0
@@ -296,36 +309,34 @@ class TrailWalker:
             n += 1
             if max_nodes and n >= max_nodes:
                 break
-        end_state = self.nodes_to_walk.items.get(self.end_key, None)
-        # since we've been subtracting the number of steps, negate the result
-        return -end_state.steps if end_state else None
+        return self.end_steps
 
     def process_node(self, state: WalkerState):
         cur_node = self.nodes[state.node_id]
-        # "remaining nodes" of the state after crossing off the node we're about to walk away from
-        next_remaining = state.remaining - cur_node.enc_id
         # remaining nodes which have paths from the current node
         next_nodes = state.remaining & cur_node.nodes
         while next_nodes > 0:
             # if next_nodes is b10000, b10100, b11111, etc., floor(log2) results in b10000
             next_id = floor(log2(next_nodes))
-            next_state = self.walk_path(state, next_id, cur_node.paths[next_id], next_remaining)
-            self.nodes_to_walk.add(next_state)
+            next_state = self.walk_path(state, cur_node, next_id)
+            # prune this state if the steps taken plus (over)estimate of max steps left is worse than the current best path
+            if not self.end_steps or (next_state.max_left + next_state.steps >= self.end_steps):
+                added = self.nodes_to_walk.add(next_state)
+                if added and next_id == self.end_id:
+                    self.end_steps = next_state.steps
             next_nodes -= self.nodes[next_id].enc_id
         
-    def walk_path(self, state: WalkerState, next_node: NodeId, path_steps: Steps, remaining: EncodedNodes) -> WalkerState:
-        # subtracting the number of steps means the longest path has the lowest number - thus allowing Dijkstra to work
-        return WalkerState(next_node, state.steps - path_steps, remaining)
+    def walk_path(self, state: WalkerState, current_node: WalkerNode, next_node: NodeId) -> WalkerState:
+        return WalkerState(next_node, state.steps + current_node.paths[next_node], state.max_left - current_node.longest, state.remaining - current_node.enc_id)
 
     def get_backtrack(self) -> list[NodeId]:
-        end_id = self.trail.end.id
-        end_state = self.nodes_to_walk.items.get(self.end_key, None)
-        if not end_state:
+        if not self.end_steps:
             return None
-        backtrack_node_ids = [end_id]
-        (node_id, steps, remaining) = end_state
+        end_state = self.nodes_to_walk.items.get(self.end_key, None)
+        backtrack_node_ids = [self.end_id]
+        (node_id, steps, _, remaining) = end_state
     
-        while steps < 0:
+        while steps > 0:
             prev_nodes = [n for n in self.nodes.values() if node_id in n.paths]
             found = False
             for prev_node in prev_nodes:
@@ -334,10 +345,10 @@ class TrailWalker:
                 prev_remaining = remaining | prev_node.enc_id
                 prev_key = WalkerStateKey(prev_node.id, prev_remaining)
                 prev_state = self.nodes_to_walk.items.get(prev_key, None)
-                # if the number of steps is exactly the current steps plus the path length, prev_node is part of the longest path
-                prev_steps = prev_node.paths[node_id] + steps
+                # if the number of steps is exactly the current steps minus the path length, prev_node is part of the longest path
+                prev_steps = steps - prev_node.paths[node_id]
                 if prev_state and prev_state.steps == prev_steps:
-                    (node_id, steps, remaining) = prev_state
+                    (node_id, steps, _, remaining) = prev_state
                     backtrack_node_ids.append(node_id)
                     found = True
                     break
@@ -363,7 +374,7 @@ def process_input(input: str, is_slippery=True, max_nodes=None, view_trail=False
 # assert process_input(get_input(23, test=True)) == 94
 # process_input(get_input(23))
 # assert process_input(get_input(23, test=True), is_slippery=False) == 154
-process_input(get_input(23), is_slippery=False, max_nodes=1_500_000)   # stops after 1.5m nodes, but arrives at correct answer (~9s)
+process_input(get_input(23), is_slippery=False)   # runs to completion (4m nodes, ~24s)
 
-# process_input(get_input(23), is_slippery=False)   # runs to completion (7.75m nodes, ~56s)
-# process_input(get_input(23), is_slippery=False, max_nodes=1_500_000, view_trail=True)   # prints the longest trail (~9s)
+# process_input(get_input(23), is_slippery=False, max_nodes=1_250_000)   # stops after 1.25m nodes, but arrives at correct answer (~7s)
+# process_input(get_input(23), is_slippery=False, max_nodes=1_250_000, view_trail=True)   # prints the longest trail (~7s)

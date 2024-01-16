@@ -108,7 +108,7 @@ class KeyedPQ[T, TKey]:
         for item in items:
             self.add(item)
 
-    def add(self, item: T):
+    def add(self, item: T) -> bool:
         item_key = self.key(item)
         do_add = True
         # replace old item in the queue if replace_if is True and the old item is not already popped
@@ -118,6 +118,7 @@ class KeyedPQ[T, TKey]:
         if do_add:
             heappush(self.pq, item)
             self.items[item_key] = item
+        return do_add
 
     def pop(self) -> T:
         item = heappop(self.pq)
